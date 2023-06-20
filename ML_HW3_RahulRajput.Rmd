@@ -1,0 +1,196 @@
+---
+title: "ML_HW3_RahulRajput"
+author: "Rahul Rajput"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+
+heart = read.csv("heart.csv")
+#heart
+
+heart_attack = heart$heart_attack
+
+### QUESTION 1 ###
+## Part 1 ##
+which(is.na(heart))
+colSums(is.na(heart))
+
+sprintf("We can identify empty/missing values in the dataframe using pieces of code mentioned above. We can also plot each individual variable to see the values and visually assess each variable.")
+sprintf("Columns which are empty or have a large number of data points missing should be dropped before performing any analysis as they would not provide any meaningful insights and would distort results. The remaining NA or empty values should be iputed especially if the dataset is small. Mean and Median within a Numeric column are useful measures to impute empty values.")
+sprintf("While splitting a dataset we must keep in mind that the distribution of variables should not be too different between the train and test subsets, for example there should be 'y' values from the entire chest_dim range of and notjust above or below a certain threshold.")
+sprintf("The training dataset must have the majority of data. Usually in the range of 75-80%% of the entire dataset.")
+
+## Part 2 ##
+library(dplyr)
+heart_new = select(heart,-c("family_record", "past_record", "wrist_dim"))
+
+which(is.na(heart_new))
+colSums(is.na(heart_new))
+
+library(dplyr)
+library(tidyr)
+heart_new = heart_new %>% 
+  mutate(across(c("height","fat_free_wt","chest_dim","hip_dim","thigh_dim","biceps_dim"), ~replace_na(., median(., na.rm=TRUE))))
+
+#heart_new
+which(is.na(heart_new))
+
+set.seed(7533)
+
+sample = sample(c(TRUE, FALSE), nrow(heart_new), replace=TRUE, prob=c(0.8,0.2))
+train = heart_new[sample, ]
+test = heart_new[!sample, ]
+
+dim(train)
+dim(test)
+
+full_model = lm(heart_attack ~ ., data = heart_new)
+summary(full_model)
+#aov(full_model)
+
+sprintf("3 variables which had no data points were dropped from the predictors, therfore leaving us with 16 predictor variables. The F-test for the overall model was highly significant.")
+
+model_train = lm(heart_attack ~ ., data = train)
+summary(model_train)
+
+predicted_fullmodel_test = predict(model_train,select(test,-c("heart_attack")))
+predicted_fullmodel_test
+
+#predicted_fullmodel_train = predict(model_train,select(train,-c("heart_attack")))
+#predicted_fullmodel_train
+
+test_residual = sum((test$heart_attack - predicted_fullmodel_test)^2)
+test_total = sum((test$heart_attack - mean(train$heart_attack))^2)
+test_residual
+test_total
+
+r_squared = 1 - (test_residual/test_total)
+r_squared
+
+r_squared2 = 1 - sum((predicted_fullmodel_test - test$heart_attack)^2)/sum((mean(train$heart_attack) - test$heart_attack)^2)
+r_squared2
+
+sprintf("The Out Of Sample r square value is quite high which seems suspicious. Possible causes for such a high value could be due to the fact that the distribution of ages is not wide and therefore the predicted valuues might not be far from the mean, inflating the r squared.")
+sprintf("A wide variation in the values of R-squared was observed when using diferent values for set.seed(). R-Squared values ranged from -34 to +0.93. A negative out of sample r-squared is negative which implies that the trained model is worse at predicting the value than the Null Model (Mean).")
+
+hist(heart$heart_attack,breaks=24)
+```
+
+```{r}
+### QUESTION 2 ###
+
+sprintf("K-Fold Cross Validation is an Out Of Sample model validation technique which involves splitting the data into K equal subsets and then choosing one subset as the test and combining the remainging subsets into the train subset. This procedure is repeated K times till each original subset has been used as a Test dataset.")
+sprintf("1. For Cross Validation, we do not have true Out of Sample data. This limits how well the model can account for actual differences in real data.")
+sprintf("2. For many scenarios the data collected over time exhibits different pattersn due to changes in environment. This may lead to systemic issues with the model if, for ex, we use 10 year old data to try and predict current data trends.")
+sprintf("3. Uses a lot of computational power, especiallly if datasets are large and K > 10.")
+sprintf("4. If the data has some significant variable missing we would not be able to account for it using Cross Validation.")
+```
+
+```{r}
+### QUESTION3 ###
+# Only using the training dataset from above.
+
+library(caret)
+#train
+
+train_control = trainControl(method = "cv", number = 8)
+CV_model = train(heart_attack ~ ., data = na.omit(train), method = "lm", trControl = train_control)
+CV_predicted_test = predict(CV_model,test[,-17])
+summary(CV_model)
+
+CV_model
+
+r_squared_cv = 1 - sum((CV_predicted_test - test$heart_attack)^2)/sum((mean(train$heart_attack) - test$heart_attack)^2)
+r_squared_cv
+
+print(CV_model)
+
+summary(lm(heart_attack ~ ., data = train))
+
+sprintf("The average R-Squared value from the 8 fold Cross Validation method was slightly lower than the R squared obtained from Question 1.")
+```
+
+```{r}
+### QUESTION 4 ###
+
+sprintf("LASSO (Least Absolute Shrinkage and Selection Operator) Regression is method to choose an appropriate subset to to use in our model. THe basic idea of a Lasso Regression is that the Null Model (mean of y) is the safe bet and therefore it would cost us to decide otherwise, or in other words we are incentivising to stay as close to the Null Model as possible. Therefore, the benefits we get from adding a variable to our model must outweigh the cost of deviance + penalty imposed.")
+
+sprintf("Regularization: control magnitude of coefficents. Shrinkage: Reduce no of variables. It is a great tool for when p > n, especially in sparse matrices.")
+
+sprintf("In Lasso Regression we aim to minimise the Deviance + Penalty combined of a model. Since the penalty is directly proportional to the magnitude of beta, variables with large coefficients are usually not included. This allows for a simpler model. The lambda controls the amount of shrinkage, i.e., how many variables are allowed to be included. If the lambda is sufficiently high no variable will be able to be included.")
+
+sprintf("For Lasso regression we start with a very high lambda such that no variable can be added. The lambda is then lowered to allow for one variable to be included. This process is repeated multiple times. We then decide the appropriate lambda cutoff value and include the corresponding variables in our model.")
+
+sprintf("The appropriate lambda can be chosen through Cross Validation on Information Criteria.")
+
+sprintf("If there is multicollinearity between variables, LASSO tends to pick a variable randomly. It is also an automatic selection process and may remove some important variables. The results from LASSO also vary strongly across samples from the data. ")
+```
+
+
+```{r}
+### QUESTION 5 ###
+## Part 1 ##
+#install.packages("glmnet", repos = "https://cran.us.r-project.org")
+library(glmnet)
+fit = cv.glmnet(as.matrix(train[,-17]),train$heart_attack)
+print(fit)
+coef(fit)
+coef(fit,s="lambda.min")
+coef(fit,s="lambda.1se")
+plot(fit)
+CV_Lasso_predicted_test_1se = predict(fit, as.matrix(test[,-17]), s = "lambda.1se")
+CV_Lasso_predicted_test_min = predict(fit, as.matrix(test[,-17]), s = "lambda.min")
+
+r_squared_Lasso_1se = 1 - sum((CV_Lasso_predicted_test_1se - test$heart_attack)^2)/sum((mean(test$heart_attack) - test$heart_attack)^2)
+r_squared_Lasso_1se
+
+r_squared_Lasso_min = 1 - sum((CV_Lasso_predicted_test_min - test$heart_attack)^2)/sum((mean(test$heart_attack) - test$heart_attack)^2)
+r_squared_Lasso_min
+
+sprintf("Lambda_min is defined as the lambda value for which the average OOS deviance is the lowest, i.e. providing the best possible predictive power. Lambda 1se is defined as the lambda value for which the average OOS deviance is no more than 1 Standard Deviation away from the mean. It would be best to choose for the 1se model as that provides most regularized model.")
+
+## Part 2 ##
+sprintf("Multiple Linear Regression : %f",r_squared) 
+sprintf("Cross Validation on Multiple Linear Regression : %f",CV_model$results[3])
+sprintf("LASSO Cross Validation (Lambda Min) : %f",r_squared_Lasso_min)
+sprintf("LASSO Cross Validation (Lambda 1se) : %f",r_squared_Lasso_1se)
+
+sprintf("The R-squared values for the seed 7533 came out quite similar for all 4 methods use which is a little surprising as one would expect LASSO regression to perform better for Out Of Sample testing. However overall results for different seeds have been extremely varied with LASSO regressions performing better in many cases. This coiuld be due to the small sample nsize.")
+
+```
+
+```{r}
+### QUESTION 6 ###
+
+sprintf("AIC stands for Akaike's Information Criteria. Information Criteria is a way to evaluate how well a model fits the data it was generated from. AIC is calculated using the model Deviance and the degrees of freedom (basically number of independent variables). The AIC is basically an estimate of Out Of Sample Deviance OR what the deviance would be on another independent sample of size n. Lower the AIC - better the model")
+sprintf("AIC is calculated as [Deviance + 2df] OR [2df - 2Log(Likelihood)], where df = K number of independent variables used during LASSO or MLE.")
+sprintf("AIC does not provide a good estimate when the df is large or when using Logistic Regression. For large df, we use a corrected AIC which is calculated as: [Deviance + 2df(n/n-df-1)]. This implies that higher the number of independent variables used in the model, the lower the AICc would be. If n is >> df AICc is equivalent for AIC. ")
+
+```
+

@@ -1,0 +1,219 @@
+---
+title: "ML - Assignment 1"
+author: "Rahul Rajput"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+### Q1 ###
+
+# Setting up a random matrix of dimensions (10000 x 1001)
+set.seed(9986)
+random_matrix = matrix(rnorm(10000*1001,0,1),nrow=10000)
+
+### Q2 ###
+y = random_matrix[,1]
+
+### Q3 ###
+p_values = c()
+
+for (i in 2:1001) {
+  p_values = append(p_values, summary(lm(y~random_matrix[,i]))$coefficients[2,4])
+}
+
+sprintf("An intercept allows us to account for the bias present in the model due to mis-spcieification by making the mean of error 0 and minimising sum of squares of errors. Therefore, we avoid removing the intercept unless the case is backed by theory. In this particular case, there is no theory to back the removal of intercept and we are not completely aware of any biases that might be present in the model, therefore we use the intercept.")
+
+### Q4 ###
+hist(p_values)
+sprintf("The histogram resembles a uniform distribution.")
+
+### Q5 ###
+sprintf("Since the data was generate randomly we would not expect to find any significant variables and observe a unioform distribution of p-values across regressors. However, if alpha was assumed to be 0.01 we would expect to find 0.01*1000 = 10 siginificant variables or we expect 10 False Discoveries (type 1 errors) from the 1000 variables.")
+
+### Q6 ###
+
+# The BH procedure allows us to control the FDR by setting our own critical values, rather than depending on a standard critical value.
+# Rank p-values in ascending order and max ranked p-value where p-value < q*rank/N
+
+## extract p-value cutoff for E[fdf] < q
+fdr <- function(pvals, q, plotit=FALSE){
+  pvals <- pvals[!is.na(pvals)]
+  N <- length(pvals)
+  
+  k <- rank(pvals, ties.method="min")
+  alpha <- max(pvals[ pvals <= (q*k/N) ])
+  
+  if(plotit){
+    sig <- factor(pvals <= alpha)
+    o <- order(pvals)
+    plot(pvals[o], log="xy", col=c("grey60","red")[sig[o]], pch=20, 
+      ylab="p-values", xlab="tests ordered by p-value", main = paste('FDR =',q))
+    lines(1:N, q*(1:N) / N)
+  }
+  
+  return(alpha)
+}
+
+q=0.1
+p_values <- p_values[!is.na(p_values)]
+N <- length(p_values)
+k <- rank(p_values, ties.method="min")
+alpha <- max(p_values[ p_values <= (q*k/N) ])
+
+fdr(p_values, 0.1, plotit=FALSE)
+
+sprintf("From the result above we see that none of the p-values for our independent variables are smaller than their corresponding BH statisitc, implying that we fail to reject the null hypotheses for all the regressors. There are no significant variables.")
+```
+
+```{r}
+### Q7 ###
+library(ggplot2)
+library(dplyr)
+library(ggcorrplot)
+
+autos = read.csv("~/Desktop/MSBA/Winter/452 - Machine Learning/Assignment 1/autos.csv")
+autos_numeric = select_if(autos, is.numeric)  
+autos_not_numeric = autos[,c('make','fuel_type','aspiration','num_of_doors','body_style','drive_wheels','engine_location','engine_type','fuel_system')] 
+
+#autos
+#autos_numeric
+#autos_not_numeric
+
+plot(autos$highway_mpg,autos$price)
+plot(autos[,23],autos$price)
+
+model.matrix(~0+., data=autos_numeric) %>% 
+  cor(use="pairwise.complete.obs") %>% 
+  ggcorrplot(show.diag = F, type="lower", lab=TRUE, lab_size=2)
+
+sprintf("From the correlation plot we observe that horsepower, engine size, number of cylinders, curb_weight, and width are highly positively correlated with the Price. MPG is negatively correlated with Price.")
+
+for (i in 1:15) {
+  hist(autos_numeric[,i])
+}
+
+sprintf('Length of cars are normally distributed. Price is highly left skewed.')
+
+for (i in 1:9) {
+  ggplot(autos, aes(x=autos_not_numeric[,i])) +
+    geom_bar()
+}
+
+ggplot(autos, aes(x=autos_not_numeric[,1])) +
+    geom_bar()
+
+ggplot(autos, aes(x=autos_not_numeric[,2])) +
+    geom_bar()
+
+ggplot(autos, aes(x=autos_not_numeric[,3])) +
+    geom_bar()
+
+ggplot(autos, aes(x=autos_not_numeric[,4])) +
+    geom_bar()
+
+ggplot(autos, aes(x=autos_not_numeric[,5])) +
+    geom_bar()
+
+ggplot(autos, aes(x=autos_not_numeric[,6])) +
+    geom_bar()
+
+ggplot(autos, aes(x=autos_not_numeric[,7])) +
+    geom_bar()
+
+ggplot(autos, aes(x=autos_not_numeric[,8])) +
+    geom_bar()
+
+ggplot(autos, aes(x=autos_not_numeric[,9])) +
+    geom_bar()
+
+sprintf("Creating dummy variables")
+
+frontdrive = ifelse(autos$drive_wheels == 'fwd',1,0)
+reardrive = ifelse(autos$drive_wheels == 'rwd',1,0)
+
+sedan = ifelse(autos$body_style == 'sedan',1,0)
+hatch = ifelse(autos$body_style == 'hatch',1,0)
+wagon = ifelse(autos$body_style == 'wagon',1,0)
+convertible = ifelse(autos$body_style == 'convertible',1,0)
+
+fourdoors = ifelse(autos$num_of_doors == 'four',1,0)
+
+aspiration = ifelse(autos$aspiration == 'turbo',1,0)
+
+price = autos$price
+mpg = autos$city_mpg
+horsepower = autos$horsepower
+engine_size = autos$engine_size
+cylinders = autos$num_of_cylinders
+weight = autos$curb_weight
+width = autos$width
+
+
+#### Q8 ####
+
+model = lm(price ~ mpg + horsepower + engine_size + cylinders + weight + width + aspiration + fourdoors + sedan + wagon + convertible + frontdrive + reardrive)
+summary(model)
+
+sprintf("Based on correlation results obtained and a qualitative analysis of the categorical variables, including histograms, we included 10 variables. 4 variables were highly significant - horsepower, engine size, width, and convertible.")
+
+#### Q9 ####
+sprintf("Since this is a multi variate analysis (performing multiple hypothesis tests at once) the probability of getting a variable as falsely significant (false positive) increases. We need to control the number of expected false discoveries by adjusting the alpha (crtical value). ")
+
+#### Q10 ####
+summary(model)
+p_values_autos = summary(model)$coefficients[,4]
+p_values_autos = p_values_autos[2:14]
+p_values_autos
+
+fdr <- function(pvals, q, plotit=FALSE){
+  pvals <- pvals[!is.na(pvals)]
+  N <- length(pvals)
+  
+  k <- rank(pvals, ties.method="min")
+  alpha <- max(pvals[ pvals <= (q*k/N) ])
+  
+  if(plotit){
+    sig <- factor(pvals <= alpha)
+    o <- order(pvals)
+    plot(pvals[o], log="xy", col=c("grey60","red")[sig[o]], pch=20, 
+      ylab="p-values", xlab="tests ordered by p-value", main = paste('FDR =',q))
+    lines(1:N, q*(1:N) / N)
+  }
+  
+  return(alpha)
+}
+
+alpha = fdr(p_values_autos,0.1,plotit=FALSE)
+fdr(p_values_autos,0.1,plotit=TRUE)
+p_values_autos_final = p_values_autos[which(p_values_autos<fdr(p_values_autos,0.1,plotit=FALSE))]
+p_values_autos
+p_values_autos_final
+
+sprintf("The number of expected true discoveries in this case is %f",(1-0.01*3))
+```
+
